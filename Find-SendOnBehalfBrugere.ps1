@@ -1072,7 +1072,9 @@ function Resolve-Entry($Entry, [bool]$PreferUserMailbox) {
 
 #region Exchange Online
 function Initialize-ExoModule {
-    if (Get-Module ExchangeOnlineManagement) { return $true }
+    $loaded = Get-Module ExchangeOnlineManagement
+    if ($loaded -and $loaded.Version -ge [version]'3.0.0') { return $true }
+    if ($loaded) { Remove-Module ExchangeOnlineManagement -Force }
     $module = Get-Module -ListAvailable ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1
     if (-not $module -or $module.Version -lt [version]'3.0.0') {
         $what = if ($module) { "Den installerede version af ExchangeOnlineManagement ($($module.Version)) er for gammel – der kræves version 3 eller nyere." }
@@ -1088,7 +1090,8 @@ function Initialize-ExoModule {
         Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
     }
     Set-Status 'Indlæser ExchangeOnlineManagement …' -Indeterminate
-    Import-Module ExchangeOnlineManagement -ErrorAction Stop
+    # -MinimumVersion: uden den indlæses den første version i PSModulePath, som kan være en gammel v2
+    Import-Module ExchangeOnlineManagement -MinimumVersion 3.0.0 -ErrorAction Stop
     $true
 }
 
@@ -1124,7 +1127,15 @@ function Connect-Exo {
         else { Set-Status 'Din version af ExchangeOnlineManagement understøtter ikke browser-login – bruger standardlogin.' }
     }
     Set-Status 'Venter på login til Exchange Online – log ind i det vindue, der åbner …' -Indeterminate
-    Invoke-WithoutSyncContext { Connect-ExchangeOnline @params | Out-Null }
+    # Vinduet minimeres under login, så login-dialogen ikke skjules bag det
+    $window.WindowState = [System.Windows.WindowState]::Minimized
+    Update-UI
+    try {
+        Invoke-WithoutSyncContext { Connect-ExchangeOnline @params | Out-Null }
+    } finally {
+        $window.WindowState = [System.Windows.WindowState]::Normal
+        [void]$window.Activate()
+    }
     Clear-RecipientCache
     Update-ConnectionUi
     if (-not $script:State.Connected) { throw 'Forbindelsen til Exchange Online kunne ikke bekræftes.' }
@@ -1151,7 +1162,7 @@ function Import-RecipientIndex {
     $recipients = New-CandidateList
     Set-Status 'Henter modtagere fra Exchange Online – det kan tage et par minutter …' -Indeterminate
     Invoke-WithoutSyncContext {
-        Get-EXORecipient -ResultSize Unlimited -ErrorAction Stop | ForEach-Object {
+        Get-EXORecipient -ResultSize Unlimited -Properties DisplayName, Alias, PrimarySmtpAddress -ErrorAction Stop | ForEach-Object {
             $recipients.Add((ConvertFrom-ExoObject $_ ''))
             if ($recipients.Count % 250 -eq 0) {
                 Set-Status ('Henter modtagere fra Exchange Online … {0:N0}' -f $recipients.Count) -Indeterminate
@@ -1178,7 +1189,7 @@ function Import-RecipientIndex {
     try {
         try {
             Invoke-WithoutSyncContext {
-                Get-EXOMailbox -SoftDeletedMailbox -ResultSize Unlimited -Properties WhenSoftDeleted, IsInactiveMailbox -ErrorAction Stop | ForEach-Object $addDeleted
+                Get-EXOMailbox -SoftDeletedMailbox -ResultSize Unlimited -Properties DisplayName, Alias, PrimarySmtpAddress, WhenSoftDeleted, IsInactiveMailbox -ErrorAction Stop | ForEach-Object $addDeleted
             }
         } catch {
             $deleted.Clear()
