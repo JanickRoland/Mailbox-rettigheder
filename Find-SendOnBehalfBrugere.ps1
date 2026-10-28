@@ -290,6 +290,33 @@ namespace SobLookup
 }
 '@
 }
+
+# Mørk titellinje via Windows' DWM-API – ignoreres på Windows-versioner uden mørk titellinje
+if (-not ('SobLookup.Native' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace SobLookup
+{
+    public static class Native
+    {
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+        public static void UseDarkTitleBar(IntPtr hwnd)
+        {
+            int on = 1;
+            // 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 10 20H1+ og 11), 19 = samme på ældre Windows 10
+            if (DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int)) != 0)
+            {
+                DwmSetWindowAttribute(hwnd, 19, ref on, sizeof(int));
+            }
+        }
+    }
+}
+'@
+}
 #endregion
 
 #region Brugerflade (XAML)
@@ -299,14 +326,28 @@ namespace SobLookup
         Title="Send on behalf – brugeropslag i Exchange Online"
         Width="1320" Height="830" MinWidth="1040" MinHeight="640"
         WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
-        Background="#F3F5F8" FontFamily="Segoe UI" FontSize="13" Foreground="#1F2937">
+        Background="#0B1220" FontFamily="Segoe UI" FontSize="13" Foreground="#E6EDF7">
   <Window.Resources>
-    <SolidColorBrush x:Key="Accent" Color="#0F6CBD"/>
-    <SolidColorBrush x:Key="Line" Color="#DDE3EA"/>
-    <SolidColorBrush x:Key="Muted" Color="#64748B"/>
+    <!-- Mørkt farvetema -->
+    <SolidColorBrush x:Key="Accent" Color="#3B8EEA"/>
+    <SolidColorBrush x:Key="Text" Color="#E6EDF7"/>
+    <SolidColorBrush x:Key="Muted" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Line" Color="#22314A"/>
+    <SolidColorBrush x:Key="BarBg" Color="#0F1A2E"/>
+    <SolidColorBrush x:Key="CardBg" Color="#111A2B"/>
+    <SolidColorBrush x:Key="InputBg" Color="#0B1424"/>
+    <SolidColorBrush x:Key="InputBorder" Color="#2A3A55"/>
+    <SolidColorBrush x:Key="ButtonBg" Color="#1A2740"/>
+    <SolidColorBrush x:Key="HeaderBg" Color="#162238"/>
+    <SolidColorBrush x:Key="HeaderHover" Color="#1D2C47"/>
+    <SolidColorBrush x:Key="Selection" Color="#1E4A7A"/>
+    <SolidColorBrush x:Key="ScrollThumbBg" Color="#33435E"/>
+    <!-- Systemfarver bruges af fx hjørnet mellem rullepaneler og markering af tekst -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#111A2B"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#1E4A7A"/>
 
     <Style x:Key="Card" TargetType="Border">
-      <Setter Property="Background" Value="White"/>
+      <Setter Property="Background" Value="{StaticResource CardBg}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="10"/>
@@ -329,7 +370,7 @@ namespace SobLookup
     <Style x:Key="CardTitle" TargetType="TextBlock">
       <Setter Property="FontSize" Value="15"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Foreground" Value="#0F2B46"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <Style x:Key="Hint" TargetType="TextBlock">
@@ -344,9 +385,9 @@ namespace SobLookup
     </Style>
 
     <Style TargetType="Button">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#1F2937"/>
-      <Setter Property="BorderBrush" Value="#CBD5E1"/>
+      <Setter Property="Background" Value="{StaticResource ButtonBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="14,7"/>
       <Setter Property="Margin" Value="0,0,8,0"/>
@@ -357,19 +398,19 @@ namespace SobLookup
             <Grid x:Name="root">
               <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                       BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6"/>
-              <Border x:Name="shade" Background="#0F172A" CornerRadius="6" Opacity="0"/>
+              <Border x:Name="shade" Background="#FFFFFF" CornerRadius="6" Opacity="0"/>
               <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center"
                                 VerticalAlignment="Center" RecognizesAccessKey="True"/>
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="shade" Property="Opacity" Value="0.07"/>
+                <Setter TargetName="shade" Property="Opacity" Value="0.08"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="shade" Property="Opacity" Value="0.14"/>
+                <Setter TargetName="shade" Property="Opacity" Value="0.16"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="root" Property="Opacity" Value="0.45"/>
+                <Setter TargetName="root" Property="Opacity" Value="0.4"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -382,14 +423,222 @@ namespace SobLookup
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
+
     <Style TargetType="TextBox">
       <Setter Property="Padding" Value="6,5"/>
-      <Setter Property="BorderBrush" Value="#CBD5E1"/>
-      <Setter Property="Background" Value="White"/>
+      <Setter Property="Background" Value="{StaticResource InputBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+      <Setter Property="SelectionBrush" Value="{StaticResource Accent}"/>
     </Style>
+
     <Style TargetType="CheckBox">
-      <Setter Property="Foreground" Value="#334155"/>
+      <Setter Property="Foreground" Value="#CBD5E1"/>
       <Setter Property="Margin" Value="0,8,0,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Grid Background="Transparent">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+              </Grid.ColumnDefinitions>
+              <Border x:Name="box" Width="16" Height="16" CornerRadius="4" Margin="0,1,8,0" VerticalAlignment="Top"
+                      Background="{StaticResource InputBg}" BorderBrush="{StaticResource InputBorder}" BorderThickness="1">
+                <Path x:Name="mark" Data="M3,7 L6,10 L11,4" Stroke="White" StrokeThickness="2" Visibility="Collapsed"/>
+              </Border>
+              <ContentPresenter Grid.Column="1" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="box" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Accent}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="ToolTip">
+      <Setter Property="Background" Value="#1A2740"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
+      <Setter Property="Padding" Value="8,5"/>
+    </Style>
+
+    <!-- Rullepaneler -->
+    <Style x:Key="ScrollThumb" TargetType="Thumb">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <Border x:Name="thumb" Background="{StaticResource ScrollThumbBg}" CornerRadius="4"/>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="thumb" Property="Background" Value="#46587A"/>
+              </Trigger>
+              <Trigger Property="IsDragging" Value="True">
+                <Setter TargetName="thumb" Property="Background" Value="#5A6E93"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="ScrollPage" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RepeatButton">
+            <Border Background="Transparent"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ScrollBar">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Width" Value="10"/>
+      <Setter Property="MinWidth" Value="10"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ScrollBar">
+            <Border Background="{TemplateBinding Background}">
+              <Track x:Name="PART_Track" IsDirectionReversed="True">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Style="{StaticResource ScrollPage}" Command="ScrollBar.PageUpCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Style="{StaticResource ScrollPage}" Command="ScrollBar.PageDownCommand"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb Style="{StaticResource ScrollThumb}" Margin="2"/>
+                </Track.Thumb>
+              </Track>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="Orientation" Value="Horizontal">
+          <Setter Property="Width" Value="Auto"/>
+          <Setter Property="MinWidth" Value="0"/>
+          <Setter Property="Height" Value="10"/>
+          <Setter Property="MinHeight" Value="10"/>
+          <Setter Property="Template">
+            <Setter.Value>
+              <ControlTemplate TargetType="ScrollBar">
+                <Border Background="{TemplateBinding Background}">
+                  <Track x:Name="PART_Track" IsDirectionReversed="False">
+                    <Track.DecreaseRepeatButton>
+                      <RepeatButton Style="{StaticResource ScrollPage}" Command="ScrollBar.PageLeftCommand"/>
+                    </Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton>
+                      <RepeatButton Style="{StaticResource ScrollPage}" Command="ScrollBar.PageRightCommand"/>
+                    </Track.IncreaseRepeatButton>
+                    <Track.Thumb>
+                      <Thumb Style="{StaticResource ScrollThumb}" Margin="2"/>
+                    </Track.Thumb>
+                  </Track>
+                </Border>
+              </ControlTemplate>
+            </Setter.Value>
+          </Setter>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Kolonneoverskrifter i tabellen og kandidatlisten -->
+    <Style x:Key="HeaderGripper" TargetType="Thumb">
+      <Setter Property="Width" Value="8"/>
+      <Setter Property="Cursor" Value="SizeWE"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <Border Background="Transparent"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Foreground" Value="#CBD5E1"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridColumnHeader">
+            <Grid>
+              <Border x:Name="headerBg" Background="{StaticResource HeaderBg}" BorderBrush="{StaticResource Line}"
+                      BorderThickness="0,0,1,1" Padding="8,0">
+                <DockPanel>
+                  <Path x:Name="sortArrow" DockPanel.Dock="Right" Width="8" Height="5" Margin="6,0,0,0" Stretch="Fill"
+                        Fill="{StaticResource Muted}" VerticalAlignment="Center" Visibility="Collapsed" Data="M0,0 L1,0 L0.5,1 Z"/>
+                  <ContentPresenter VerticalAlignment="Center"/>
+                </DockPanel>
+              </Border>
+              <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource HeaderGripper}"/>
+              <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource HeaderGripper}"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="headerBg" Property="Background" Value="{StaticResource HeaderHover}"/>
+              </Trigger>
+              <Trigger Property="SortDirection" Value="Ascending">
+                <Setter TargetName="sortArrow" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="sortArrow" Property="Data" Value="M0,1 L1,1 L0.5,0 Z"/>
+              </Trigger>
+              <Trigger Property="SortDirection" Value="Descending">
+                <Setter TargetName="sortArrow" Property="Visibility" Value="Visible"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="GridViewColumnHeader">
+      <Setter Property="Foreground" Value="#CBD5E1"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="GridViewColumnHeader">
+            <Grid>
+              <Border Background="{StaticResource HeaderBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,1" Padding="8,6">
+                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+              </Border>
+              <Thumb x:Name="PART_HeaderGripper" HorizontalAlignment="Right" Margin="0,0,-4,0" Style="{StaticResource HeaderGripper}"/>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListViewItem">
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListViewItem">
+            <Border x:Name="itemBg" Background="Transparent" Padding="0,4">
+              <GridViewRowPresenter VerticalAlignment="Center" Columns="{TemplateBinding GridView.ColumnCollection}"
+                                    Content="{TemplateBinding Content}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="itemBg" Property="Background" Value="#16233A"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="itemBg" Property="Background" Value="{StaticResource Selection}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </Window.Resources>
 
@@ -401,7 +650,7 @@ namespace SobLookup
     </Grid.RowDefinitions>
 
     <!-- Topbjælke -->
-    <Border Grid.Row="0" Background="#0F2B46" Padding="22,14">
+    <Border Grid.Row="0" Background="{StaticResource BarBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="22,14">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -410,12 +659,13 @@ namespace SobLookup
         <StackPanel>
           <TextBlock Text="Send on behalf – brugeropslag" FontSize="20" FontWeight="SemiBold" Foreground="White"/>
           <TextBlock Text="Finder initialer, alias og e-mailadresse i Exchange Online for navne uden match"
-                     Foreground="#B8C7D9" Margin="0,2,0,0"/>
+                     Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
         </StackPanel>
-        <Border Grid.Column="1" VerticalAlignment="Center" Background="#1D4166" CornerRadius="14" Padding="12,6">
+        <Border Grid.Column="1" VerticalAlignment="Center" Background="{StaticResource ButtonBg}" BorderBrush="{StaticResource InputBorder}"
+                BorderThickness="1" CornerRadius="14" Padding="12,6">
           <StackPanel Orientation="Horizontal">
             <Ellipse x:Name="dotConn" Width="10" Height="10" Fill="#94A3B8" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBlock x:Name="lblConn" Text="Ikke forbundet" Foreground="White" VerticalAlignment="Center"/>
+            <TextBlock x:Name="lblConn" Text="Ikke forbundet" Foreground="{StaticResource Text}" VerticalAlignment="Center"/>
           </StackPanel>
         </Border>
       </Grid>
@@ -524,39 +774,30 @@ namespace SobLookup
               <TextBlock Text="Resultat" Style="{StaticResource CardTitle}"/>
             </StackPanel>
             <WrapPanel Grid.Column="1" Margin="18,0,8,0" VerticalAlignment="Center">
-              <Border Style="{StaticResource Chip}" Background="#DCF2E3"><TextBlock x:Name="chipFound" Text="Fundet: 0" Foreground="#14532D"/></Border>
-              <Border Style="{StaticResource Chip}" Background="#FEF3C7"><TextBlock x:Name="chipCheck" Text="Kontrollér: 0" Foreground="#78350F"/></Border>
-              <Border Style="{StaticResource Chip}" Background="#FFE4CC"><TextBlock x:Name="chipChoose" Text="Kræver valg: 0" Foreground="#7C2D12"/></Border>
-              <Border Style="{StaticResource Chip}" Background="#FDE2E2"><TextBlock x:Name="chipMissing" Text="Ikke fundet: 0" Foreground="#7F1D1D"/></Border>
+              <Border Style="{StaticResource Chip}" Background="#12351F"><TextBlock x:Name="chipFound" Text="Fundet: 0" Foreground="#86EFAC"/></Border>
+              <Border Style="{StaticResource Chip}" Background="#3A2E0A"><TextBlock x:Name="chipCheck" Text="Kontrollér: 0" Foreground="#FCD34D"/></Border>
+              <Border Style="{StaticResource Chip}" Background="#3D2410"><TextBlock x:Name="chipChoose" Text="Kræver valg: 0" Foreground="#FDBA74"/></Border>
+              <Border Style="{StaticResource Chip}" Background="#3F1519"><TextBlock x:Name="chipMissing" Text="Ikke fundet: 0" Foreground="#FCA5A5"/></Border>
             </WrapPanel>
             <Button x:Name="btnExport" Grid.Column="2" Content="Gem CSV …" Style="{StaticResource Primary}" Margin="0" IsEnabled="False"/>
           </Grid>
 
           <DataGrid x:Name="gridResults" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
                     CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended" SelectionUnit="FullRow"
-                    HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF1F5"
-                    BorderBrush="{StaticResource Line}" BorderThickness="1" Background="White"
-                    RowHeight="28" ColumnHeaderHeight="32">
-            <DataGrid.ColumnHeaderStyle>
-              <Style TargetType="DataGridColumnHeader">
-                <Setter Property="Background" Value="#F1F5F9"/>
-                <Setter Property="Foreground" Value="#334155"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Padding" Value="8,0"/>
-                <Setter Property="BorderBrush" Value="#E2E8F0"/>
-                <Setter Property="BorderThickness" Value="0,0,1,1"/>
-              </Style>
-            </DataGrid.ColumnHeaderStyle>
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Line}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1" Background="{StaticResource InputBg}"
+                    Foreground="{StaticResource Text}" RowHeight="28" ColumnHeaderHeight="32">
             <DataGrid.RowStyle>
               <Style TargetType="DataGridRow">
-                <Setter Property="Background" Value="White"/>
+                <Setter Property="Background" Value="#0E1626"/>
+                <Setter Property="Foreground" Value="{StaticResource Text}"/>
                 <Style.Triggers>
-                  <DataTrigger Binding="{Binding Category}" Value="Found"><Setter Property="Background" Value="#EFFAF2"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Category}" Value="Manual"><Setter Property="Background" Value="#EAF3FD"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Category}" Value="Check"><Setter Property="Background" Value="#FFF8E1"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Category}" Value="Choose"><Setter Property="Background" Value="#FFEEDD"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Category}" Value="NotFound"><Setter Property="Background" Value="#FDECEC"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Category}" Value="Error"><Setter Property="Background" Value="#F3E8FF"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Found"><Setter Property="Background" Value="#10291B"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Manual"><Setter Property="Background" Value="#0F2740"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Check"><Setter Property="Background" Value="#33290A"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Choose"><Setter Property="Background" Value="#3A2410"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="NotFound"><Setter Property="Background" Value="#3A1518"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Category}" Value="Error"><Setter Property="Background" Value="#2E1A3D"/></DataTrigger>
                 </Style.Triggers>
               </Style>
             </DataGrid.RowStyle>
@@ -574,8 +815,8 @@ namespace SobLookup
                 </Setter>
                 <Style.Triggers>
                   <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#CFE3F7"/>
-                    <Setter Property="Foreground" Value="#0F172A"/>
+                    <Setter Property="Background" Value="{StaticResource Selection}"/>
+                    <Setter Property="Foreground" Value="White"/>
                   </Trigger>
                 </Style.Triggers>
               </Style>
@@ -612,14 +853,15 @@ namespace SobLookup
             <DockPanel Grid.Column="0">
               <TextBlock DockPanel.Dock="Top" Text="Detaljer" FontWeight="SemiBold" Margin="0,0,0,4"/>
               <TextBox x:Name="txtDetail" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                       Background="#F8FAFC" BorderBrush="{StaticResource Line}"/>
+                       BorderBrush="{StaticResource Line}"/>
             </DockPanel>
             <DockPanel Grid.Column="2">
               <TextBlock DockPanel.Dock="Top" Text="Kandidater – marker den rigtige og klik 'Brug valgte kandidat' (eller dobbeltklik)"
                          FontWeight="SemiBold" Margin="0,0,0,4" TextTrimming="CharacterEllipsis"/>
               <Button x:Name="btnUseCandidate" DockPanel.Dock="Bottom" Content="Brug valgte kandidat"
                       HorizontalAlignment="Right" Margin="0,8,0,0" IsEnabled="False"/>
-              <ListView x:Name="lstCandidates" BorderBrush="{StaticResource Line}" SelectionMode="Single">
+              <ListView x:Name="lstCandidates" SelectionMode="Single" Background="{StaticResource InputBg}"
+                        Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}">
                 <ListView.View>
                   <GridView>
                     <GridViewColumn Header="Visningsnavn" DisplayMemberBinding="{Binding DisplayName}" Width="170"/>
@@ -637,11 +879,11 @@ namespace SobLookup
     </Grid>
 
     <!-- Statuslinje -->
-    <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,8">
+    <Border Grid.Row="2" Background="{StaticResource BarBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,8">
       <DockPanel>
         <ProgressBar x:Name="progress" DockPanel.Dock="Right" Width="240" Height="6" Minimum="0" Maximum="100"
-                     Foreground="#0F6CBD" Background="#E2E8F0" BorderThickness="0" VerticalAlignment="Center"/>
-        <TextBlock x:Name="lblStatus" Text="Klar." Foreground="#475569" VerticalAlignment="Center"
+                     Foreground="{StaticResource Accent}" Background="#1F2A3D" BorderThickness="0" VerticalAlignment="Center"/>
+        <TextBlock x:Name="lblStatus" Text="Klar." Foreground="{StaticResource Muted}" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" Margin="0,0,16,0"/>
       </DockPanel>
     </Border>
@@ -1128,12 +1370,13 @@ function Connect-Exo {
     }
     Set-Status 'Venter på login til Exchange Online – log ind i det vindue, der åbner …' -Indeterminate
     # Vinduet minimeres under login, så login-dialogen ikke skjules bag det
+    $previousState = $window.WindowState
     $window.WindowState = [System.Windows.WindowState]::Minimized
     Update-UI
     try {
         Invoke-WithoutSyncContext { Connect-ExchangeOnline @params | Out-Null }
     } finally {
-        $window.WindowState = [System.Windows.WindowState]::Normal
+        $window.WindowState = $previousState
         [void]$window.Activate()
     }
     Clear-RecipientCache
@@ -1441,6 +1684,9 @@ $script:State = @{
 $script:Results = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
 $ui.gridResults.ItemsSource = $script:Results
 
+$window.Add_SourceInitialized({
+        try { [SobLookup.Native]::UseDarkTitleBar((New-Object System.Windows.Interop.WindowInteropHelper($window)).Handle) } catch { }
+    })
 $ui.btnConnect.Add_Click({ Invoke-UiAction { Connect-Exo } })
 $ui.btnDisconnect.Add_Click({ Invoke-UiAction { Disconnect-Exo } })
 $ui.btnReload.Add_Click({ Invoke-UiAction { Clear-RecipientCache; Import-RecipientIndex; Set-Status 'Modtagerlisten er hentet igen.' 0 } })
