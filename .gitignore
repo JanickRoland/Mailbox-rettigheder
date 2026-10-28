@@ -1,0 +1,3 @@
+# Data med navne og e-mailadresser på medarbejdere skal ikke i repoet
+*.csv
+*.xlsx
